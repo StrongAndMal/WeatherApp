@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weather App</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="card">
+      <div class="search">
+        <input type="text" placeholder="Enter City Name" spellcheck="false" />
+        <button><img src="images/search.png" alt="search" /></button>
+      </div>
+      <div class="error">Please enter a valid city name</div>
+      <div class="weather">
+        <div class="time-info">
+          <h3 class="current-time"></h3>
+          <p class="date"></p>
+        </div>
+        <img src="images/rain.png" class="weather-icon" alt="rain" />
+        <h1 class="temp">14°C</h1>
+        <h2 class="city">Los Angeles</h2>
+        <div class="details">
+          <div class="col">
+            <img src="images/humidity.png" alt="humidity" />
+            <div>
+              <p class="humidity">40%</p>
+              <p>Humidity</p>
+            </div>
+          </div>
+          <div class="col">
+            <img src="images/wind.png" alt="wind" />
+            <div>
+              <p class="wind">14 km/h</p>
+              <p>Wind Speed</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const apiKey = "025ef81fd52e1afcbec1b1109dd440e5";
+      const apiUrl =
+        "https://api.openweathermap.org/data/2.5/weather?units=metric&q=";
+
+      const searchInput = document.querySelector(".search input");
+      const searchButton = document.querySelector(".search button");
+      let timeUpdateInterval = null;
+
+      // Weather icon mapping - only using available icons
+      const weatherIcons = {
+        clear: "clear.png",
+        clouds: "clouds.png",
+        rain: "rain.png",
+        drizzle: "drizzle.png",
+        mist: "mist.png",
+        fog: "mist.png",
+        haze: "mist.png",
+        smoke: "mist.png",
+        dust: "mist.png",
+        sand: "mist.png",
+        ash: "mist.png",
+        squall: "rain.png",
+        snow: "rain.png",
+        thunderstorm: "rain.png",
+      };
+
+      function getWeatherIcon(weatherMain) {
+        const iconName = weatherMain.toLowerCase();
+        return weatherIcons[iconName] || "clouds.png";
+      }
+
+      function formatTime(date) {
+        const hours = date.getHours().toString().padStart(2, "0");
+        const minutes = date.getMinutes().toString().padStart(2, "0");
+        const ampm = hours >= 12 ? "PM" : "AM";
+        const formattedHours = hours % 12 || 12;
+        return `${formattedHours}:${minutes} ${ampm}`;
+      }
+
+      function formatDate(date) {
+        const options = {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        };
+        return date.toLocaleDateString("en-US", options);
+      }
+
+      function getLocalTime(timezone) {
+        // Get current UTC time
+        const now = new Date();
+        // Convert to local time in the city
+        // timezone is in seconds, convert to milliseconds and add to UTC time
+        const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+        const localTime = new Date(utc + timezone * 1000);
+        return localTime;
+      }
+
+      function updateTime(timezone) {
+        try {
+          const localTime = getLocalTime(timezone);
+
+          const timeElement = document.querySelector(".current-time");
+          const dateElement = document.querySelector(".date");
+
+          if (timeElement && dateElement) {
+            timeElement.textContent = formatTime(localTime);
+            dateElement.textContent = formatDate(localTime);
+          }
+        } catch (error) {
+          console.error("Error updating time:", error);
+        }
+      }
+
+      function startTimeUpdate(timezone) {
+        if (timeUpdateInterval) {
+          clearInterval(timeUpdateInterval);
+        }
+
+        // Update immediately
+        updateTime(timezone);
+
+        // Update every second for more accuracy
+        timeUpdateInterval = setInterval(() => updateTime(timezone), 1000);
+      }
+
+      async function checkWeather(city) {
+        try {
+          const response = await fetch(apiUrl + city + `&appid=${apiKey}`);
+          const data = await response.json();
+
+          if (data.cod === "404") {
+            throw new Error("City not found");
+          }
+
+          // Update weather information
+          document.querySelector(".city").innerHTML = data.name;
+          document.querySelector(".temp").innerHTML =
+            Math.round(data.main.temp) + "°C";
+          document.querySelector(".humidity").innerHTML =
+            data.main.humidity + "%";
+          document.querySelector(".wind").innerHTML = data.wind.speed + " km/h";
+
+          // Update weather icon
+          const weatherIcon = document.querySelector(".weather-icon");
+          const weatherMain = data.weather[0].main;
+          const iconFileName = getWeatherIcon(weatherMain);
+
+          const testImage = new Image();
+          testImage.onload = () => {
+            weatherIcon.src = `images/${iconFileName}`;
+          };
+          testImage.onerror = () => {
+            console.warn(`Icon ${iconFileName} not found, using default`);
+            weatherIcon.src = "images/clouds.png";
+          };
+          testImage.src = `images/${iconFileName}`;
+
+          // Show weather card and hide error
+          document.querySelector(".weather").style.display = "block";
+          document.querySelector(".error").style.display = "none";
+
+          // Start time updates
+          startTimeUpdate(data.timezone);
+        } catch (error) {
+          console.error("Error fetching weather data:", error);
+          document.querySelector(".weather").style.display = "none";
+          document.querySelector(".error").style.display = "block";
+          document.querySelector(".error").textContent =
+            "Please enter a valid city name";
+
+          if (timeUpdateInterval) {
+            clearInterval(timeUpdateInterval);
+            timeUpdateInterval = null;
+          }
+        }
+      }
+
+      searchButton.addEventListener("click", () => {
+        const city = searchInput.value.trim();
+        if (city) {
+          checkWeather(city);
+        } else {
+          document.querySelector(".error").style.display = "block";
+          document.querySelector(".error").textContent =
+            "Please enter a city name";
+        }
+      });
+
+      searchInput.addEventListener("keypress", (event) => {
+        if (event.key === "Enter") {
+          const city = searchInput.value.trim();
+          if (city) {
+            checkWeather(city);
+          } else {
+            document.querySelector(".error").style.display = "block";
+            document.querySelector(".error").textContent =
+              "Please enter a city name";
+          }
+        }
+      });
+
+      // Initial load
+      checkWeather("los angeles");
+    </script>
+  </body>
+</html>
